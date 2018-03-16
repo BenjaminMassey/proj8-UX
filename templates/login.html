@@ -1,0 +1,19 @@
+<!-- https://stackoverflow.com/a/10793200 -->
+
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <ul class=flashes>
+    {% for message in messages %}
+      <li>{{ message }}</li>
+    {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+
+<form method=post>
+	{{ form.csrf_token }}
+    Username: {{ form.username }} </br>
+    Password: {{ form.password }} </br>
+	Remember Me: {{ form.remember }} </br>
+    <input type=submit>
+</form>

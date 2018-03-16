@@ -54,6 +54,12 @@
 
 </br>
 <p>
+	<input id="loginButton" type="button" value="Login" onclick="login_user()" />
+	</br>
+	</br>
+	<input id="logoutButton" type="button" value="Logout" onclick="logout_user()" />
+	</br>
+	</br>
 	<label id="unl">Username:</label>
 	</br>
 	<input type=text name="username" id="username" value="" />
@@ -62,14 +68,16 @@
 	</br>
 	<input type="password" name="password" id="password" value="" />
 	</br>
-	<input id="loginButton" type="button" value="Login" onclick="login_user()" />
 	<input id="registerUser" type="button" value="Register New User" onclick="register_user();") />
 	</br>
+	</br>
 	<input id="testToken" type="button" value="Test Auth Token" onclick="test_auth_token();") />
+	</br>
 	</br>
 	<label>Results:</label>
 	</br>
 	<input id="userResult" type= "string" value="" size="200"readonly />
+	</br>
 	</br>
 	<label>Top Number:</label>
 	<input type=text name="topNumberEntry" id="topNum" value="" />
@@ -156,6 +164,7 @@
   var LISTCLOSE_URL = SCRIPT_ROOT + "/listCloseOnly";
   var LISTOPEN_URL = SCRIPT_ROOT + "/listOpenOnly";
   var RECEIVE_TOKEN_URL = SCRIPT_ROOT + "/api/token/receive";
+  var LOGOUT_USER_URL = SCRIPT_ROOT + "/logout";
 
   // Pass calctimes a <td> element containing the data for a control.
   // It extracts the distance and calls the server to get times to
@@ -356,38 +365,17 @@
   }
   
   function login_user() {
-	var usernameField = document.getElementById("username");
-	var username = usernameField.value;
-	var passwordField = document.getElementById("password");
-	var password = passwordField.value;
-	var userResultField = document.getElementById("userResult");
-	
-	$.getJSON(RECEIVE_TOKEN_URL, 
-		{ 
-			username: username,
-			password: password
-		}, 
-      // response handler
-      function(data) {
+	window.location = SCRIPT_ROOT + "/login";
+  }
+  
+  function logout_user() {
+  
+	$.getJSON(LOGOUT_USER_URL, {}, 
+	function(data) {
+		var userResultField = document.getElementById("userResult");
 		var answer = data.result;
-		if (answer.success == "yes") {
-			userResultField.value = "Succesfully logged in as " + username;
-			usernameField.style.display = 'none';
-			passwordField.style.display = 'none';
-			document.getElementById("unl").style.display = 'none';
-			document.getElementById("pwl").style.display = 'none';
-			document.getElementById("loginButton").style.display = 'none';
-			document.getElementById("registerUser").style.display = 'none';
-		}
-		else if (answer.success == "no") {
-			userResultField.value = "Failed to login... Check your credentials.";
-		}
-		else {
-			userResultField.value = "Got a strange response on login...?";
-		}
-	  }
-	);
-	
+		userResultField.value = answer.message;
+	  });
   }
   
   function list_all() {

@@ -5,3 +5,6 @@ pep8
 autopep8
 pymongo
 passlib
+flask_wtf
+wtforms
+flask_login

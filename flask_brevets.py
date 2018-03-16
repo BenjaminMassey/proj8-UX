@@ -20,6 +20,11 @@ from itsdangerous import (TimedJSONWebSignatureSerializer \
 import logging
 import password
 
+from flask_wtf import Form, CSRFProtect
+from wtforms import TextField, PasswordField, BooleanField, validators
+from flask_login import LoginManager, UserMixin, \
+                                login_required, login_user, logout_user 
+
 ###
 # Globals
 ###
@@ -32,6 +37,124 @@ db = client.get_default_database()
 collection = db['times']
 usersCollection = db['users']
 
+csrf = CSRFProtect()
+csrf.init_app(app)
+
+###
+# Login stuff
+###
+# Lots of random basic code from https://flask-login.readthedocs.io/en/latest/
+
+login_manager = LoginManager()
+
+login_manager.init_app(app)
+
+
+usersList = []
+class User:
+   def __init__(self, name, ID, auth, active, anon):
+      self.username = name
+      self.userID = ID
+      self.is_authenticated = auth
+      self.is_active = active
+      self.is_anonymous = anon
+      global usersList
+      usersList.append(self)
+   def get_id(self):
+      return self.userID
+
+@login_manager.user_loader
+def load(user_id):
+   global usersList
+   for user in usersList:
+      if user.get_id() == user_id:
+         return user
+   return None
+
+def is_safe_url(url):
+   if "virus" in url.lower():
+      return False
+   else:
+      return True
+
+# http://flask.pocoo.org/snippets/64/
+class LoginForm(Form):
+    username = TextField('Username', [validators.Required()])
+    password = PasswordField('Password', [validators.Required()])
+    remember = BooleanField('Remember Me', [validators.Required()])
+
+    def __init__(self, *args, **kwargs):
+        Form.__init__(self, *args, **kwargs)
+        self.user = None
+
+    def validate(self):
+
+        if self.username.data == None or self.password.data == None:
+            return False
+
+        data = usersCollection.find()
+        userID = None
+        for datum in data:
+            if datum['username'] == self.username.data:
+               userID = datum['_id']
+
+        if userID is None:
+            flask.flash("Unknown username")
+            return False
+
+        
+        user = User(self.username.data, userID, True, True, False)
+
+        if not verifyPassword(self.username.data, self.password.data):
+            flask.flash("Invalid password")
+            return False
+
+        print("holy crap it worked", file=sys.stderr)
+
+        self.user = user
+        return True
+
+def loginAUser(user):
+   token = generate_auth_token(600, user.userID)
+   session['token'] = token
+
+@app.route('/logout')
+def logout():
+   global usersList
+   if (session['token'] == None) or (len(usersList) == 0):
+       return flask.jsonify(result={"message":"Not logged in currently, so can't log out"})
+   else:
+       session['token'] = None
+       message = "Successfully logged out of " + usersList[len(usersList) - 1].username
+       usersList = []
+       return flask.jsonify(result={"message":message})
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    
+    form = LoginForm()
+    if form.validate():
+        
+        loginAUser(form.user)
+
+        flask.flash('Logged in successfully as ' + form.user.username  + '.')
+        
+        nextPage = flask.request.args.get('next')
+
+        if nextPage == None:
+           if not form.remember.data:
+               return flask.render_template('calc.html')
+           else:
+               # Cookies: https://www.tutorialspoint.com/flask/flask_cookies.htm
+               resp = flask.make_response(flask.render_template('calc.html'))
+               resp.set_cookie('token', session['token'])
+               return resp
+        if not is_safe_url(nextPage):
+            return flask.abort(400)
+        else:
+           return flask.redirect(nextPage)
+         
+    return flask.render_template('login.html', form=form)
 
 ###
 # Verification Functions
@@ -39,9 +162,6 @@ usersCollection = db['users']
 
 def generate_auth_token(expiration, userID):
    s = Serializer(app.secret_key, expires_in=expiration)
-   #s = Serializer('test1234@#$', expires_in=expiration)
-   # pass index of user
-   #return s.dumps({'id': 1})
    return s.dumps({'id': str(userID)})
 
 def verify_auth_token(token):
@@ -55,6 +175,8 @@ def verify_auth_token(token):
     return "Success"
 
 def verifyPassword(username, passwordRAW):
+    if len(usersList) > 0 and session['token'] != None: # Using token auth
+        verify_auth_token(session['token'])
     pwHASH = None
     data = usersCollection.find()
     for datum in data:
@@ -176,8 +298,18 @@ def _load_DB():
 @app.route("/listAll/json")
 @app.route("/listAll")
 def listAll():
-    username = request.args.get('username', "", type=str)
+    if len(usersList) == 0:
+        username = request.args.get('username', "", type=str)
+    else:
+        username = usersList[len(usersList) - 1].username
     token = session['token']
+    if token == None:
+        # Handles remember me with cookies, or else it breaks
+        cookie = request.cookies.get('token')
+        if cookie == None:
+            return flask.jsonify(result={"result":"<html>401: Cannot verify your credentials, please try again!</html>"})
+        else:
+            token = cookie
     verified = verify_auth_token(token);
     if verified == "Success":
         data = collection.find()
@@ -202,8 +334,18 @@ def listAll():
 @app.route("/listOpenOnly/json")
 @app.route("/listOpenOnly")
 def listOpenOnly():
-    username = request.args.get('username', "", type=str)
+    if len(usersList) == 0:
+        username = request.args.get('username', "", type=str)
+    else:
+        username = usersList[len(usersList) - 1].username
     token = session['token']
+    if token == None:
+        # Handles remember me with cookies, or else it breaks
+        cookie = request.cookies.get('token')
+        if cookie == None:
+            return flask.jsonify(result={"result":"<html>401: Cannot verify your credentials, please try again!</html>"})
+        else:
+            token = cookie
     verified = verify_auth_token(token);
     if verified == "Success":
         k = request.args.get('top', default = "999", type = str)
@@ -235,8 +377,18 @@ def listOpenOnly():
 @app.route("/listCloseOnly/json")
 @app.route("/listCloseOnly")
 def listCloseOnly():
-    username = request.args.get('username', "", type=str)
+    if len(usersList) == 0:
+        username = request.args.get('username', "", type=str)
+    else:
+        username = usersList[len(usersList) - 1].username
     token = session['token']
+    if token == None:
+        # Handles remember me with cookies, or else it breaks
+        cookie = request.cookies.get('token')
+        if cookie == None:
+            return flask.jsonify(result={"result":"<html>401: Cannot verify your credentials, please try again!</html>"})
+        else:
+            token = cookie
     verified = verify_auth_token(token);
     if verified == "Success":
         k = request.args.get('top', default = "999", type = str)
@@ -267,8 +419,18 @@ def listCloseOnly():
 
 @app.route("/listAll/csv")
 def listAllCSV():
-    username = request.args.get('username', "", type=str)
+    if len(usersList) == 0:
+        username = request.args.get('username', "", type=str)
+    else:
+        username = usersList[len(usersList) - 1].username
     token = session['token']
+    if token == None:
+        # Handles remember me with cookies, or else it breaks
+        cookie = request.cookies.get('token')
+        if cookie == None:
+            return flask.jsonify(result={"result":"<html>401: Cannot verify your credentials, please try again!</html>"})
+        else:
+            token = cookie
     verified = verify_auth_token(token);
     if verified == "Success":
         data = collection.find()
@@ -288,8 +450,18 @@ def listAllCSV():
 
 @app.route("/listOpenOnly/csv")
 def listOpenOnlyCSV():
-    username = request.args.get('username', "", type=str)
+    if len(usersList) == 0:
+        username = request.args.get('username', "", type=str)
+    else:
+        username = usersList[len(usersList) - 1].username
     token = session['token']
+    if token == None:
+        # Handles remember me with cookies, or else it breaks
+        cookie = request.cookies.get('token')
+        if cookie == None:
+            return flask.jsonify(result={"result":"<html>401: Cannot verify your credentials, please try again!</html>"})
+        else:
+            token = cookie
     verified = verify_auth_token(token);
     if verified == "Success":
         k = request.args.get('top', default = "999", type = str)
@@ -317,8 +489,18 @@ def listOpenOnlyCSV():
 
 @app.route("/listCloseOnly/csv")
 def listCloseOnlyCSV():
-    username = request.args.get('username', "", type=str)
+    if len(usersList) == 0:
+        username = request.args.get('username', "", type=str)
+    else:
+        username = usersList[len(usersList) - 1].username
     token = session['token']
+    if token == None:
+        # Handles remember me with cookies, or else it breaks
+        cookie = request.cookies.get('token')
+        if cookie == None:
+            return flask.jsonify(result={"result":"<html>401: Cannot verify your credentials, please try again!</html>"})
+        else:
+            token = cookie
     verified = verify_auth_token(token);
     if verified == "Success":
         k = request.args.get('top', default = "999", type = str)
@@ -386,6 +568,8 @@ def testAuthToken():
 
 @app.route("/api/token/receive")
 def getToken():
+    if len(usersList) > 0: # Already have a token set
+        return flask.jsonify(result={"success":"yes"})
     un = request.args.get('username', default = "", type = str)
     pwRAW = request.args.get('password', default = "", type = str)
     verified = verifyPassword(un, pwRAW)
@@ -396,7 +580,6 @@ def getToken():
             if datum['username'] == un:
                 userID = datum['_id']
         if userID == "":
-            print("ruh roh", file=sys.stderr)
             result = {"success":"no"}
         else:
             token = generate_auth_token(600, userID)
