@@ -1,0 +1,514 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html> <head>
+<title>ACP Controle Times</title>
+
+  <!-- 'viewport' is used by bootstrap to respond to device size -->
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- Javascript:  JQuery from a content distribution network (CDN) -->
+  <script
+     src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js">
+  </script>
+
+  <!-- Bootstrap includes javascript and css  (must follow jquery) -->
+  <link rel="stylesheet"
+   href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
+   <script
+    src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js">
+   </script>
+
+  <!-- moment.js is the JavaScript equivalent of arrow.py -->
+  <script 
+    src="{{ url_for('static', filename="js/moment.min.js") }}"></script>
+
+</head>
+
+   <!-- Our own style sheet -->
+   <link rel="stylesheet" href="/static/css/calc.css" />
+
+<body>
+<!-- bootstrap requires a 'container' div around content -->
+<div class="container">
+
+<h1>ACP Brevet Times</h1>
+  <p>This worksheet is for ACP-sanctioned brevets between 200 and 1000 kilometers</p>
+
+  <!--
+  -- If there are any warnings or other messages from a prior
+  -- request to the server, 
+  -- they appear above the rest of the content, just until the next 
+  -- action.  (This is only on request/response transactions that
+  -- result in regenerating the page, not on every xmlhttp request.) 
+  -->
+
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <ul class=flashes>
+    {% for message in messages %}
+      <li>{{ message }}</li>
+    {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+
+
+</br>
+<p>
+	<label id="unl">Username:</label>
+	</br>
+	<input type=text name="username" id="username" value="" />
+	</br>
+	<label id="pwl">Password:</label>
+	</br>
+	<input type="password" name="password" id="password" value="" />
+	</br>
+	<input id="loginButton" type="button" value="Login" onclick="login_user()" />
+	<input id="registerUser" type="button" value="Register New User" onclick="register_user();") />
+	</br>
+	<input id="testToken" type="button" value="Test Auth Token" onclick="test_auth_token();") />
+	</br>
+	<label>Results:</label>
+	</br>
+	<input id="userResult" type= "string" value="" size="200"readonly />
+	</br>
+	<label>Top Number:</label>
+	<input type=text name="topNumberEntry" id="topNum" value="" />
+	<label>Format:</label>
+    <input type="radio" id="jsonR" name="format" value="Fixed Rate" checked="checked"> JSON
+    <input type="radio" id="csvR" name="format" value="Variable Rate"> CSV
+    <input id="listAllButton" type="button" value="List All" onclick="list_all()" />
+	<input id="listCloseButton" type="button" value="List Close" onclick="list_close()" />
+	<input id="listOpenButton" type="button" value="List Open" onclick="list_open()" />
+</p>
+</br>
+<!-- Design on bootstrap grid -->
+<form id="values" role="form">
+<div class="row">
+  <div class="col-md-4">
+    <label>Distance</label>
+  <select name="distance" id="brevet_dist_km">
+    <option value="200">200km</option>
+    <option value="300">300km</option>
+    <option value="400">400km</option>
+    <option value="600">600km</option>
+    <option value="1000">1000km</option>
+  </select>
+  </div> <!-- columns 1--4  -->
+  <div class="col-md-6">
+    <label>Begins at</label>
+    <input type=date name="begin_date" id="begin_date" value="2017-01-01" />
+    <input type=time name="begin_time" id="begin_time" value="00:00"    />
+  </div> <!-- columns 5-10 -->
+  </div> <!-- row -->
+
+  <br />  <!-- Cosmetic -- a little vertical space -->
+  <!-- Although we do not use tables for general page layout, they are
+       appropriate for something that really is a table, like this
+       one.  We allocate it the full 12 columns of the bootstrap grid.
+  -->
+  <div class="row">
+  <div class="col-md-12"> 
+  <table class="control_time_table">
+      <tr>
+	<th> Miles </th>
+	<th> Km </th>
+	<th>Location</th>
+	<th>Open</th>
+	<th>Close</th>
+	<th>Notes</th>
+      </tr>
+   {% for row in range(20) %}
+    <tr class="control">
+      <!-- Dist (mi) -->
+      <td><input name="miles" type="number" 
+           min="0" max="900" size="5" /></td>
+      <!-- Dist (km) -->
+      <td><input name="km" type="text"
+	   min="0" max="1100" size="5" /> </td>
+      <!-- Location (optional) -->
+      <td><input name="location" type="text" 
+        placeholder="Optional location name"
+	size="20" /> </td>
+      <!-- Open time (read only, set by JavaScript function -->
+      <td><input name="open" type="datetime" value="" readonly /></td>
+      <!-- Close time (read only, set by JavaScript function -->
+      <td><input name="close" type="datetime" value="" readonly /></td>
+      <!-- Notes (error messages for this row) -->
+      <td><input name="notes" type= "string" value="" size="50"readonly /></td>
+    </tr>
+    {% endfor %}
+  </table>
+  <input id="submitButton" type="button" value="Submit To Database" onclick="submit_DB();") />
+  <input id="loadButton" type="button" value="Load From Database" onclick="load_DB();" />
+  </div> <!-- col -->
+  </div> <!-- row -->
+</form>
+
+<script type="text/javascript">
+
+  var SCRIPT_ROOT = {{ request.script_root|tojson|safe }} ;
+  var TIME_CALC_URL = SCRIPT_ROOT + "/_calc_times";
+  var SUBMIT_DB_URL = SCRIPT_ROOT + "/_submit_DB";
+  var LOAD_DB_URL = SCRIPT_ROOT + "/_load_DB";
+  var REGISTER_USER_URL = SCRIPT_ROOT + "/api/register";
+  var TEST_AUTH_TOKEN_URL = SCRIPT_ROOT + "/api/token";
+  var LISTALL_URL = SCRIPT_ROOT + "/listAll";
+  var LISTCLOSE_URL = SCRIPT_ROOT + "/listCloseOnly";
+  var LISTOPEN_URL = SCRIPT_ROOT + "/listOpenOnly";
+  var RECEIVE_TOKEN_URL = SCRIPT_ROOT + "/api/token/receive";
+
+  // Pass calctimes a <td> element containing the data for a control.
+  // It extracts the distance and calls the server to get times to
+  // fill in open and close times in a human-readable format.
+  // (If we want to also keep the ISO-formatted times, we'll need to
+  // stash them in hidden fields.) 
+  function calc_times(control) {
+  
+	//https://stackoverflow.com/a/1085810
+	var brevetRAW = document.getElementById("brevet_dist_km");
+	var brevet = brevetRAW.options[brevetRAW.selectedIndex].value;
+	console.log("Brevet = " + brevet);
+	
+	var beginDateRAW = document.getElementById("begin_date");
+	var beginDate = beginDateRAW.value;
+	console.log("Beginning Date = " + beginDate);
+	
+	var beginTimeRAW = document.getElementById("begin_time");
+	var beginTime = beginTimeRAW.value;
+	console.log("Beginning Time = " + beginTime);
+  
+    var km = control.find("input[name='km']").val();
+    var open_time_field = control.find("input[name='open']");
+    var close_time_field = control.find("input[name='close']");
+	var notes_field = control.find("input[name='notes']");
+    
+    $.getJSON(TIME_CALC_URL, 
+		{ 
+			km: km, 
+			brevet: brevet,
+			beginDate: beginDate,
+			beginTime: beginTime
+		}, 
+      // response handler
+      function(data) {
+         var times = data.result;
+         console.log("Got a response: " +  times);
+         console.log("Response.open = " + times.open);
+         open_time_field.val( moment(times.open).format("ddd M/D H:mm"));
+         close_time_field.val( moment(times.close).format("ddd M/D H:mm"));
+		 notes_field.val(times.notes);
+	   } // end of handler function
+     );// End of getJSON
+    }
+	
+	
+  function submit_DB(){
+	// https://stackoverflow.com/a/7157670 for the loops
+	 var kms = "";
+	 $("input[name='km']").each(function() {
+		kms += ($(this).val()) + "~";
+	 });
+	 var opens = "";
+	 $("input[name='open']").each(function() {
+		opens += ($(this).val()) + "~";
+	 });
+	 var closes = "";
+	 $("input[name='close']").each(function() {
+		closes += ($(this).val()) + "~";
+	 });
+	 var noteses = "";
+	 $("input[name='notes']").each(function() {
+		noteses += ($(this).val()) + "~";
+	 });
+	 var usernameField = document.getElementById("username");
+	 var username = usernameField.value;
+	 var passwordField = document.getElementById("password");
+	 var password = passwordField.value;
+	 if(kms.length > 20) { // If there are any values (20 comes from 20 ~s for empty)
+		 $.getJSON(SUBMIT_DB_URL, 
+			{ 
+				kms: kms,
+				opens: opens,
+				closes: closes,
+				noteses: noteses,
+				username: username,
+				password: password
+			},
+			function(data){
+				var answer = data.result;
+				var userResultField = document.getElementById("userResult");
+				userResultField.value = answer.message;
+			}
+		 );
+	 }
+	 else{
+		var userResultField = document.getElementById("userResult");
+		userResultField.value = "Can't submit nothing!";
+	 }
+  }
+	
+  function load_DB(){
+  
+	var usernameField = document.getElementById("username");
+	var username = usernameField.value;
+	var passwordField = document.getElementById("password");
+	var password = passwordField.value;
+	
+	var form = document.getElementById("values");
+	form.reset();
+	
+	$.getJSON(LOAD_DB_URL, 
+		{ 
+			username: username,
+			password: password
+		}, 
+      // response handler
+      function(data) {
+		// https://stackoverflow.com/a/7157670 for the loops
+         var times = data.result;
+		 var i = 0;
+		 $("input[name='miles']").each(function() {
+			$(this).val(times.miles[i]);
+			i++;
+		 });
+		 i = 0;
+		 $("input[name='km']").each(function() {
+			$(this).val(times.kms[i]);
+			i++;
+		 });
+		 i = 0;
+		 $("input[name='open']").each(function() {
+			if(i < times.opens.length){
+				$(this).val(moment(times.opens[i]).format("ddd M/D H:mm"));
+			}
+			i++;
+		 });
+		 i = 0;
+		 $("input[name='close']").each(function() {
+			if(i < times.closes.length){
+				$(this).val(moment(times.closes[i]).format("ddd M/D H:mm"));
+			}
+			i++;
+	  	 });
+		 i = 0;
+		 $("input[name='notes']").each(function() {
+			$(this).val(times.noteses[i]);
+			i++;
+		});
+		var userResultField = document.getElementById("userResult");
+		userResultField.value = times.message;
+	   } // end of handler function
+     );// End of getJSON
+  }
+  
+  function register_user() {
+	var usernameField = document.getElementById("username");
+	var username = usernameField.value;
+	var passwordField = document.getElementById("password");
+	var password = passwordField.value;
+	var userResultField = document.getElementById("userResult");
+	
+	$.getJSON(REGISTER_USER_URL, 
+		{ 
+			username: username,
+			password: password
+		}, 
+      // response handler
+      function(data) {
+		var answer = data.result;
+		userResultField.value = ("Your id: " + answer.location + " | Your hash: " + answer.password);
+		if (answer.message != "") {
+			userResultField.value = answer.message;
+		}
+		else {
+			usernameField.style.display = 'none';
+			passwordField.style.display = 'none';
+			document.getElementById("unl").style.display = 'none';
+			document.getElementById("pwl").style.display = 'none';
+			document.getElementById("loginButton").style.display = 'none';
+			document.getElementById("registerUser").style.display = 'none';
+		}
+	  }
+	);
+  }
+  
+  function test_auth_token() {
+	var usernameField = document.getElementById("username");
+	var username = usernameField.value;
+	var passwordField = document.getElementById("password");
+	var password = passwordField.value;
+	var userResultField = document.getElementById("userResult");
+
+	$.getJSON(TEST_AUTH_TOKEN_URL, 
+		{ 
+			username: username,
+			password: password
+		}, 
+      // response handler
+      function(data) {
+		var answer = data.result;
+		userResultField.value = ("Your token: " + answer.token + " | Had duration: " + answer.duration);
+		if (answer.message != "") {
+			userResultField.value = answer.message;
+		}
+	  }
+	);
+  }
+  
+  function login_user() {
+	var usernameField = document.getElementById("username");
+	var username = usernameField.value;
+	var passwordField = document.getElementById("password");
+	var password = passwordField.value;
+	var userResultField = document.getElementById("userResult");
+	
+	$.getJSON(RECEIVE_TOKEN_URL, 
+		{ 
+			username: username,
+			password: password
+		}, 
+      // response handler
+      function(data) {
+		var answer = data.result;
+		if (answer.success == "yes") {
+			userResultField.value = "Succesfully logged in as " + username;
+			usernameField.style.display = 'none';
+			passwordField.style.display = 'none';
+			document.getElementById("unl").style.display = 'none';
+			document.getElementById("pwl").style.display = 'none';
+			document.getElementById("loginButton").style.display = 'none';
+			document.getElementById("registerUser").style.display = 'none';
+		}
+		else if (answer.success == "no") {
+			userResultField.value = "Failed to login... Check your credentials.";
+		}
+		else {
+			userResultField.value = "Got a strange response on login...?";
+		}
+	  }
+	);
+	
+  }
+  
+  function list_all() {
+	var usernameField = document.getElementById("username");
+	var username = usernameField.value;
+	//var passwordField = document.getElementById("password");
+	//var password = passwordField.value;
+	var addition = "";
+	if (document.getElementById("jsonR").checked) {
+		addition = "/json"
+	}
+	else {
+		addition = "/csv"
+	}
+	//var token = '<%= Session["token"] %>';
+	$.getJSON(LISTALL_URL + addition, 
+		{ 
+			//token: token
+			username: username//,
+			//password: password
+		}, 
+      // response handler
+      function(data) {
+		var answer = data.result;
+		var newWindow = window.open();
+		newWindow.document.write(answer.result);
+	  }
+	);
+  }
+  
+  function list_close() {
+	var usernameField = document.getElementById("username");
+	var username = usernameField.value;
+	//var passwordField = document.getElementById("password");
+	//var password = passwordField.value;
+	var addition = "";
+	if (document.getElementById("jsonR").checked) {
+		addition = "/json"
+	}
+	else {
+		addition = "/csv"
+	}
+	var top = document.getElementById("topNum").value;
+
+	$.getJSON(LISTCLOSE_URL + addition, 
+		{ 
+			username: username,
+			//password: password,
+			top: top
+		}, 
+      // response handler
+       function(data) {
+		var answer = data.result;
+		var newWindow = window.open();
+		newWindow.document.write(answer.result);
+	  }
+	);
+  }
+  
+  function list_open() {
+	var usernameField = document.getElementById("username");
+	var username = usernameField.value;
+	//var passwordField = document.getElementById("password");
+	//var password = passwordField.value;
+	var addition = "";
+	if (document.getElementById("jsonR").checked) {
+		addition = "/json"
+	}
+	else {
+		addition = "/csv"
+	}
+	var top = document.getElementById("topNum").value;
+	if (top == "") {
+		top = "999";
+	}
+	
+	$.getJSON(LISTOPEN_URL + addition, 
+		{ 
+			username: username,
+			//password: password,
+			top: top
+		}, 
+      // response handler
+       function(data) {
+		var answer = data.result;
+		var newWindow = window.open();
+		newWindow.document.write(answer.result);
+	  }
+	);
+  }
+
+  $(document).ready(function(){
+   // Do the following when the page is finished loading
+
+      $('input[name="miles"]').change(
+         function() {
+             var miles = parseFloat($(this).val());
+             var km = (1.609344 * miles).toFixed(1) ;
+             console.log("Converted " + miles + " miles to " + km + " kilometers");
+             var control_entry = $(this).parents(".control")
+             var target = control_entry.find("input[name='km']");
+             target.val( km );
+             // Then calculate times for this entry
+             calc_times(control_entry);
+          });
+
+      $('input[name="km"]').change(
+         function() {
+             var km = parseFloat($(this).val());
+             var miles = (0.621371 * km).toFixed(1) ;
+             console.log("Converted " + km + " km to " + miles + " miles");
+             var control_entry = $(this).parents(".control")
+             var target = control_entry.find("input[name='miles']");
+             target.val( miles );
+             // Then calculate times for this entry
+             calc_times(control_entry);
+          });
+
+     });   // end of what we do on document ready
+
+</script>
+
+</div>
+</body> </html>
