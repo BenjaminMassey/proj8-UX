@@ -131,6 +131,8 @@ def logout():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+
+    session['token'] = 'DUMMY'
     
     form = LoginForm()
     if form.validate():
@@ -176,7 +178,7 @@ def verify_auth_token(token):
 
 def verifyPassword(username, passwordRAW):
     if len(usersList) > 0 and session['token'] != None: # Using token auth
-        verify_auth_token(session['token'])
+          verify_auth_token(session['token'])
     pwHASH = None
     data = usersCollection.find()
     for datum in data:
@@ -197,6 +199,7 @@ def verifyPassword(username, passwordRAW):
 @app.route("/")
 @app.route("/index")
 def index():
+    session['token'] = 'DUMMY'
     app.logger.debug("Main page entry")
     return flask.render_template('calc.html')
 
