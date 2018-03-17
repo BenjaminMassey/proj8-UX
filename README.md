@@ -1,18 +1,32 @@
 # Project 8: User interface for uthenticated brevet time calculator service
 
-The goal of this project is to create frontend/UI for Brevet app using Flask-WTF
-and Flask-Login introduced in lectures 08a-flask-login and 08b-flask-wtf. You frontend/UI will reuse the
-authentication service that you created in project 7 (https://github.com/UOCIS322/proj7-auth); in this project,  you are only adding
-a facelift to the services. In addition to creating UI for basic authentication and token
-generation, you will add three additional functionalities in your UI: (a) remember me, (b) logout, 
-and (c) CSRF protection. Note: You don’t have to maintain sessions.
+Made by Ben Massey for CIS 322 March 2018
 
-## Tasks
+Mostly just project 7 - check my github
 
-You'll turn in your credentials.ini using which we will get the following:
+## Additions
 
-* The working application with three parts.
+Changed system of logins at least partially - using WTForms stuff. This means
+a separate login page, a way to logout, CRSF security, and a remember me.
+Registering users still works the same way.
 
-* Dockerfile
+## How to use
 
-* docker-compose.yml
+1. Create a MongoDB database (I used m-lab)
+
+2. Create a collection titled "users" in that database
+
+3. Create a collection titled "times" in that database
+
+4. Create your credentials.ini file based on credentials-skel.ini
+
+5. Run the program
+
+- Basic Python 
+	- python flask-brevets.py
+- Basic Docker
+	- docker build -t NAME .
+- Docker-Compose
+	- docker-compose up
+	
+6. Go to the webpage (defined by your machine ip and your config port) and have fun!
